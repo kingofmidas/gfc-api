@@ -1,0 +1,2 @@
+database = "postgres"
+database_url = "dbname=gfc_api user=admin password=gfc_api_1234 host=db port=5432 sslmode=disable"
