@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+
 	"github.com/kingofmidas/gfc-api/internal/model"
 )
 
@@ -8,22 +10,35 @@ import (
 func (s *Store) Create(order *model.Order) error {
 	var orderID int
 
-	err := s.db.QueryRow(
-		"INSERT INTO orders (status) VALUES ($1) RETURNING id",
-		order.Status,
-	).Scan(&orderID)
+	ctx := context.Background()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
+	err = tx.QueryRow(
+		"INSERT INTO orders (status) VALUES ($1) RETURNING id",
+		order.Status,
+	).Scan(&orderID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
 	for _, orderItem := range order.ItemList {
-		err := s.db.QueryRow(
-			"INSERT INTO items_orders (item_id, order_id, count) VALUES ($1, $2, $3) RETURNING order_id",
+		_, err = tx.ExecContext(
+			ctx, "INSERT INTO items_orders (item_id, order_id, count) VALUES ($1, $2, $3) RETURNING order_id",
 			orderItem.ItemID, orderID, orderItem.Count,
-		).Scan(&orderID)
+		)
 		if err != nil {
+			tx.Rollback()
 			return err
 		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
 	}
 
 	return nil
